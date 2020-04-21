@@ -19,15 +19,12 @@ enum TestAngoError : Error {
 public class TestAngo {
 
     /// 暗号
-    public static func encrypt(plainString: String, sharedKey: String, iv: String) throws -> Data {
+    public static func encrypt(data: Data, sharedKey: String, iv: String) throws -> Data {
         guard let initialzeVector = (iv.data(using: .utf8)) else {
-            throw Chiper.AESError.otherFailed("Encrypt iv failed", iv)
+            throw TestAngoError.otherFailed("Encrypt iv failed", iv)
         }
         guard let keyData = sharedKey.data(using: .utf8) else {
-            throw Chiper.AESError.otherFailed("Encrypt sharedkey failed", sharedKey)
-        }
-        guard let data = plainString.data(using: .utf8) else {
-            throw Chiper.AESError.otherFailed("Encrypt plainString failed", plainString)
+            throw TestAngoError.otherFailed("Encrypt sharedkey failed", sharedKey)
         }
 
         // 暗号化後のデータのサイズを計算
@@ -55,7 +52,7 @@ public class TestAngo {
         }
 
         if UInt32(cryptStatus) != UInt32(kCCSuccess) {
-            throw Chiper.AESError.encryptFailed("Encrypt Failed", kCCSuccess)
+            throw TestAngoError.encryptFailed("Encrypt Failed", kCCSuccess)
         }
         return cryptData
     }
@@ -63,10 +60,10 @@ public class TestAngo {
     /// 復号
     public static func decrypt(encryptedData: Data, sharedKey: String, iv: String) throws -> String {
         guard let initialzeVector = (iv.data(using: .utf8)) else {
-            throw Chiper.AESError.otherFailed("Encrypt iv failed", iv)
+            throw TestAngoError.otherFailed("Encrypt iv failed", iv)
         }
         guard let keyData = sharedKey.data(using: .utf8) else {
-            throw Chiper.AESError.otherFailed("Encrypt sharedKey failed", sharedKey)
+            throw TestAngoError.otherFailed("Encrypt sharedKey failed", sharedKey)
         }
 
         let clearLength = size_t(encryptedData.count + kCCBlockSizeAES128)
@@ -93,29 +90,18 @@ public class TestAngo {
         }
 
         if UInt32(cryptStatus) != UInt32(kCCSuccess) {
-            throw Chiper.AESError.decryptFailed("Decrypt Failed", kCCSuccess)
+            throw TestAngoError.decryptFailed("Decrypt Failed", kCCSuccess)
         }
 
         // パディングされていた文字数分のデータを捨てて文字列変換を行う
         guard let decryptedStr = String(data: clearData.prefix(numBytesEncrypted), encoding: .utf8) else {
-            throw Chiper.AESError.decryptFailed("PKSC Unpad Failed", clearData)
+            throw TestAngoError.decryptFailed("PKSC Unpad Failed", clearData)
         }
         return decryptedStr
     }
 
     /// ランダムIV生成
     public static func generateRandamIV() throws -> String {
-        // CSPRNGから乱数取得
-        var randData = Data(count: 8)
-        let result = randData.withUnsafeMutableBytes {mutableBytes in
-            SecRandomCopyBytes(kSecRandomDefault, 16, mutableBytes)
-        }
-        if result != errSecSuccess {
-            // SecRandomCopyBytesに失敗(本来はあり得ない)
-            throw Chiper.AESError.otherFailed("SecRandomCopyBytes Failed GenerateRandam IV", result)
-        }
-        // 16進数文字列化
-        let ivStr = Chiper.convetHexString(frombinary: randData)
-        return ivStr
+        return "1234567890123456"
     }
 }
