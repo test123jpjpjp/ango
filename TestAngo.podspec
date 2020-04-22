@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "TestAngo"
-  s.version      = "0.0.1"
+  s.version      = "0.0.3"
   s.summary      = "よく使う日付関係の関数"
   s.description  = <<-DESC
                    よく使う日付関数

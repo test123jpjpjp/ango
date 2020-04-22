@@ -19,85 +19,63 @@ enum TestAngoError : Error {
 public class TestAngo {
 
     /// 暗号
-    public static func encrypt(data: Data, sharedKey: String, iv: String) throws -> Data {
-        guard let initialzeVector = (iv.data(using: .utf8)) else {
-            throw TestAngoError.otherFailed("Encrypt iv failed", iv)
-        }
-        guard let keyData = sharedKey.data(using: .utf8) else {
-            throw TestAngoError.otherFailed("Encrypt sharedkey failed", sharedKey)
-        }
+static public func aesCBC256Enc(_ data:[UInt8], key:[UInt8]) throws -> Data {
+        let keyLength   = size_t(kCCKeySizeAES256)
+        let ivLength    = size_t(kCCBlockSizeAES128)
+        let cryptDataLength = size_t(data.count + kCCBlockSizeAES128)
+        var cryptData = [UInt8](repeating: UInt8.zero, count:ivLength + cryptDataLength)
 
-        // 暗号化後のデータのサイズを計算
-        let cryptLength = size_t(Int(ceil(Double(data.count / kCCBlockSizeAES128)) + 1.0) * kCCBlockSizeAES128)
-
-        var cryptData = Data(count:cryptLength)
-        var numBytesEncrypted: size_t = 0
-
-        // 暗号化
-        let cryptStatus = cryptData.withUnsafeMutableBytes {cryptBytes in
-            initialzeVector.withUnsafeBytes {ivBytes in
-                data.withUnsafeBytes {dataBytes in
-                    keyData.withUnsafeBytes {keyBytes in
-                        CCCrypt(CCOperation(kCCEncrypt),
-                                CCAlgorithm(kCCAlgorithmAES),
-                                CCOptions(kCCOptionPKCS7Padding),
-                                keyBytes, keyData.count,
-                                ivBytes,
-                                dataBytes, data.count,
-                                cryptBytes, cryptLength,
-                                &numBytesEncrypted)
-                    }
-                }
-            }
+        let status = SecRandomCopyBytes(kSecRandomDefault, Int(ivLength), UnsafeMutablePointer<UInt8>(mutating: cryptData))
+        if (status != 0) {
+            print("IV Error, errno: \(status)")
+            throw NSError()
         }
-
-        if UInt32(cryptStatus) != UInt32(kCCSuccess) {
-            throw TestAngoError.encryptFailed("Encrypt Failed", kCCSuccess)
-        }
-        return cryptData
-    }
-
-    /// 復号
-    public static func decrypt(encryptedData: Data, sharedKey: String, iv: String) throws -> String {
-        guard let initialzeVector = (iv.data(using: .utf8)) else {
-            throw TestAngoError.otherFailed("Encrypt iv failed", iv)
-        }
-        guard let keyData = sharedKey.data(using: .utf8) else {
-            throw TestAngoError.otherFailed("Encrypt sharedKey failed", sharedKey)
-        }
-
-        let clearLength = size_t(encryptedData.count + kCCBlockSizeAES128)
-        var clearData   = Data(count:clearLength)
 
         var numBytesEncrypted :size_t = 0
+        let cryptStatus = CCCrypt(CCOperation(kCCEncrypt),
+                                  CCAlgorithm(kCCAlgorithmAES128),
+                                  CCOptions(kCCOptionPKCS7Padding),
+                                  key, keyLength,
+                                  cryptData,
+                                  data, data.count,
+                                  &cryptData + ivLength, cryptDataLength,
+                                  &numBytesEncrypted)
 
-        // 復号
-        let cryptStatus = clearData.withUnsafeMutableBytes {clearBytes in
-            initialzeVector.withUnsafeBytes {ivBytes in
-                encryptedData.withUnsafeBytes {dataBytes in
-                    keyData.withUnsafeBytes {keyBytes in
-                        CCCrypt(CCOperation(kCCDecrypt),
-                                CCAlgorithm(kCCAlgorithmAES),
-                                CCOptions(kCCOptionPKCS7Padding),
-                                keyBytes, keyData.count,
-                                ivBytes,
-                                dataBytes, encryptedData.count,
-                                clearBytes, clearLength,
-                                &numBytesEncrypted)
-                    }
-                }
-            }
+        if UInt32(cryptStatus) == UInt32(kCCSuccess) {
+            cryptData.removeSubrange(numBytesEncrypted+ivLength..<cryptData.count)
         }
+        else {
+            print("Error: \(cryptStatus)")
+            throw NSError()
+        }
+        return Data(cryptData)
+    }
 
-        if UInt32(cryptStatus) != UInt32(kCCSuccess) {
-            throw TestAngoError.decryptFailed("Decrypt Failed", kCCSuccess)
-        }
+    static public func aesCBC256Dec(_ data: [UInt8], key: [UInt8]) throws -> Data {
+        let clearLength = size_t(data.count)
+        var clearData   = [UInt8](repeating:0, count:clearLength)
 
-        // パディングされていた文字数分のデータを捨てて文字列変換を行う
-        guard let decryptedStr = String(data: clearData.prefix(numBytesEncrypted), encoding: .utf8) else {
-            throw TestAngoError.decryptFailed("PKSC Unpad Failed", clearData)
+        let keyLength   = size_t(kCCKeySizeAES256)
+        let ivLength    = size_t(kCCBlockSizeAES128)
+
+        var numBytesDecrypted :size_t = 0
+        let cryptStatus = CCCrypt(CCOperation(kCCDecrypt),
+                                  CCAlgorithm(kCCAlgorithmAES128),
+                                  CCOptions(kCCOptionPKCS7Padding),
+                                  key, keyLength,
+                                  data,
+                                  UnsafePointer<UInt8>(data) + ivLength, data.count - ivLength,
+                                  &clearData, clearLength,
+                                  &numBytesDecrypted)
+
+        if UInt32(cryptStatus) == UInt32(kCCSuccess) {
+            clearData.removeSubrange(numBytesDecrypted..<clearLength)
+
+        } else {
+            print("Error: \(cryptStatus)")
+            throw NSError()
         }
-        return decryptedStr
+        return Data(clearData)
     }
 
     /// ランダムIV生成
